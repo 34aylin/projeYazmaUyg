@@ -202,8 +202,14 @@ def dogrula_ve_duzelt(
     istemci: Istemci, sonuc: dict, nace_listesi: str, bugun: date,
 ) -> list[str]:
     """Modelin garanti edemediği kuralları kodda uygular. Uygulama notlarını döndürür."""
+    import html as _html_mod
     notlar: list[str] = []
     alanlar = sonuc["alanlar"]
+
+    # HTML entity'leri çöz (AI bazen ' → &#x27; gibi encode eder)
+    for alan in list(alanlar):
+        if isinstance(alanlar[alan], str):
+            alanlar[alan] = _html_mod.unescape(alanlar[alan])
 
     # Markdown işaretlerini temizle, karakter sınırlarını uygula
     for alan, (etiket, sinir, _) in METIN_ALANLARI.items():
