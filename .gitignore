@@ -1,17 +1,13 @@
-# Python
-backend/.venv/
-backend/__pycache__/
-backend/*.pyc
-backend/*.pyo
-*.egg-info/
-
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
 frontend/.env*.local
 
-# Veri & loglar
-backend/data/
+# Gizli ayarlar ve kullanıcı verisi
+.env
+data/
+
+# Loglar
 *.log
 
 # OS

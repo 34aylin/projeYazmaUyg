@@ -3,162 +3,31 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Plus, LogOut, Rocket, User, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  LayoutDashboard,
+  FolderOpen,
+  Plus,
+  LogOut,
+  Cpu,
+  Menu,
+  X,
+  Sliders,
+  Check,
+  ChevronDown,
+  Sparkles,
+  Layers,
+} from "lucide-react";
 import { getUser, removeToken } from "@/lib/auth";
 import { STATULER } from "@/lib/fields";
 import { useAyarlar, SAGLAYICILAR, EFOR_SEVIYELERI } from "@/lib/ayarlar";
 
-const STATU_DOT: Record<string, string> = {
-  Taslak: "bg-gray-400",
-  "Devam Ediyor": "bg-blue-500",
-  Başvuruldu: "bg-green-500",
-  Arşiv: "bg-orange-400",
-};
-
-function SidebarNav() {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
-  const panelActive = pathname === "/panel";
-  const yeniActive = pathname === "/yeni";
-  const projelerActive = pathname === "/projeler" || pathname.startsWith("/projeler/");
-
-  return (
-    <nav className="flex-1 px-3 py-4 overflow-y-auto">
-      {/* Panel */}
-      <Link
-        href="/panel"
-        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-1 ${
-          panelActive ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-        }`}
-      >
-        <LayoutDashboard size={16} />
-        Panel
-      </Link>
-
-      {/* Yeni başvuru */}
-      <Link
-        href="/yeni"
-        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-1 ${
-          yeniActive ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-        }`}
-      >
-        <Plus size={16} />
-        Yeni başvuru
-      </Link>
-
-      {/* Projelerim + alt statüler */}
-      <div className="mt-1">
-        <Link
-          href="/projeler"
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            pathname === "/projeler" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-          }`}
-        >
-          <FolderOpen size={16} />
-          Projelerim
-        </Link>
-
-        {/* Statü linkleri — alt alta */}
-        <div className="mt-0.5 ml-3 space-y-0.5">
-          {STATULER.map((statu) => {
-            const dot = STATU_DOT[statu] ?? "bg-gray-400";
-            return (
-              <Link
-                key={statu}
-                href={`/projeler?statu=${encodeURIComponent(statu)}`}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-              >
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                {statu}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Ayarlar bölümü - açık proje varsa göster */}
-      {projelerActive && pathname.startsWith("/projeler/") && pathname.split("/").length === 3 && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider px-3 mb-2">Açık proje</p>
-          <Link
-            href="/projeler"
-            className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            ← Projelere dön
-          </Link>
-        </div>
-      )}
-    </nav>
-  );
-}
-
-function AiAyarlari() {
-  const { saglayici, setSaglayici, efor, setEfor } = useAyarlar();
-  const [acik, setAcik] = useState(false);
-
-  return (
-    <div className="border-t border-gray-200 px-3 py-3">
-      <button
-        onClick={() => setAcik((v) => !v)}
-        className="flex items-center justify-between w-full px-2 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-      >
-        <span className="flex items-center gap-2">
-          <span className="text-base leading-none">⚙</span>
-          AI Ayarları
-        </span>
-        {acik ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </button>
-
-      {acik && (
-        <div className="mt-2 space-y-3">
-          {/* Sağlayıcı */}
-          <div>
-            <p className="text-xs text-gray-400 px-2 mb-1.5">Model</p>
-            <div className="space-y-0.5">
-              {SAGLAYICILAR.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSaglayici(s)}
-                  className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                    saglayici === s
-                      ? "bg-indigo-50 text-indigo-700 font-semibold"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Efor */}
-          <div>
-            <p className="text-xs text-gray-400 px-2 mb-1.5">Analiz derinliği</p>
-            <div className="flex gap-1">
-              {EFOR_SEVIYELERI.map((e) => (
-                <button
-                  key={e.value}
-                  onClick={() => setEfor(e.value)}
-                  className={`flex-1 text-xs py-1.5 rounded-lg transition-colors font-medium ${
-                    efor === e.value
-                      ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {e.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SidebarFooter() {
   const router = useRouter();
+  const [mobileAcik, setMobileAcik] = useState(false);
+  const [aiMenuAcik, setAiMenuAcik] = useState(false);
   const [user, setUser] = useState<{ email: string; ad: string; rol: string } | null>(null);
+  const { saglayici, setSaglayici, efor, setEfor } = useAyarlar();
 
   useEffect(() => {
     setUser(getUser());
@@ -169,62 +38,273 @@ function SidebarFooter() {
     router.push("/giris");
   }
 
+  const panelActive = pathname === "/panel";
+  const yeniActive = pathname === "/yeni";
+  const projelerActive = pathname === "/projeler" || pathname.startsWith("/projeler/");
+
   return (
-    <div className="border-t border-gray-200 px-4 py-3">
-      {user && (
-        <div className="flex items-center gap-2 mb-2">
-          <div className="bg-indigo-100 text-indigo-600 rounded-full p-1.5 shrink-0">
-            <User size={13} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-900 truncate">{user.ad}</p>
-            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+    <div className="min-h-screen bg-[#F4EFEA] text-[#2C2016] flex flex-col font-sans">
+      {/* ── 3D TOP HEADER ────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 bg-[#FFFDF9]/95 backdrop-blur-md border-b-[1.5px] border-[#DFCFC0] px-4 sm:px-8 py-3 shadow-[0_3px_12px_rgba(70,45,20,0.05)]">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          {/* Brand Mark with 3D tactile icon */}
+          <Link href="/panel" className="flex items-center gap-3 group">
+            <div className="w-9 h-9 rounded-xl bg-[#2563EB] border-b-2 border-[#1D4ED8] text-white flex items-center justify-center font-bold shadow-xs transition-transform group-hover:scale-105">
+              <Sparkles size={18} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-base tracking-tight text-[#2C2016] leading-tight">
+                Marta Ar-Ge
+              </span>
+              <span className="text-[11px] text-[#786655] font-semibold leading-tight">
+                Teknopark Başvuru Portalı
+              </span>
+            </div>
+          </Link>
+
+          {/* Central 3D Navigation (Desktop) */}
+          <nav className="hidden md:flex items-center gap-1.5 bg-[#EFE7DE] p-1.5 rounded-2xl border-[1.5px] border-[#DFCFC0] shadow-[inset_0_1px_3px_rgba(70,45,20,0.06)]">
+            <Link
+              href="/panel"
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                panelActive
+                  ? "bg-[#2563EB] text-white border-b-2 border-[#1D4ED8] shadow-xs"
+                  : "text-[#786655] hover:text-[#2C2016] hover:bg-[#E5DCD0]"
+              }`}
+            >
+              <LayoutDashboard size={14} />
+              <span>Panel</span>
+            </Link>
+
+            <Link
+              href="/projeler"
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                projelerActive && !yeniActive
+                  ? "bg-[#2563EB] text-white border-b-2 border-[#1D4ED8] shadow-xs"
+                  : "text-[#786655] hover:text-[#2C2016] hover:bg-[#E5DCD0]"
+              }`}
+            >
+              <FolderOpen size={14} />
+              <span>Projeler</span>
+            </Link>
+
+            <Link
+              href="/yeni"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                yeniActive
+                  ? "bg-[#2563EB] text-white border-b-2 border-[#1D4ED8] shadow-xs"
+                  : "text-[#2563EB] hover:bg-[#E5DCD0]"
+              }`}
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              <span>Yeni Başvuru</span>
+            </Link>
+          </nav>
+
+          {/* Right Controls: AI Selector & User Profile */}
+          <div className="flex items-center gap-3">
+            {/* AI Model Pill */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAiMenuAcik((v) => !v)}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFE7DE] hover:bg-[#E5DCD0] border-[1.5px] border-[#DFCFC0] text-xs font-bold text-[#2C2016] transition-colors cursor-pointer shadow-2xs"
+                title="Yapay zekâ modelini değiştir"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
+                <span className="truncate max-w-[120px]">{saglayici.split(" ")[0]}</span>
+                <ChevronDown size={13} className="text-[#786655]" />
+              </button>
+
+              {/* AI Dropdown Popover */}
+              {aiMenuAcik && (
+                <div className="absolute right-0 mt-2 w-64 card-3d p-3 z-50 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#DFCFC0]">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#786655] flex items-center gap-1.5">
+                      <Cpu size={12} /> Yapay Zekâ Modeli
+                    </span>
+                    <button
+                      onClick={() => setAiMenuAcik(false)}
+                      className="text-[#786655] hover:text-[#2C2016]"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    {SAGLAYICILAR.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          setSaglayici(s);
+                          setAiMenuAcik(false);
+                        }}
+                        className={`w-full flex items-center justify-between text-left text-xs px-2.5 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                          saglayici === s
+                            ? "bg-[#2563EB] text-white"
+                            : "text-[#2C2016] hover:bg-[#EFE7DE]"
+                        }`}
+                      >
+                        <span className="truncate">{s}</span>
+                        {saglayici === s && <Check size={12} className="text-white" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Analiz Derinliği */}
+                  <div className="pt-2 border-t border-[#DFCFC0]">
+                    <div className="flex items-center gap-1 text-[10px] text-[#786655] font-bold uppercase mb-1.5">
+                      <Sliders size={10} /> Analiz Derinliği
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 bg-[#EFE7DE] p-1 rounded-xl border border-[#DFCFC0]">
+                      {EFOR_SEVIYELERI.map((e) => (
+                        <button
+                          key={e.value}
+                          onClick={() => setEfor(e.value)}
+                          className={`text-[10px] py-1 rounded-lg font-bold text-center transition-colors cursor-pointer ${
+                            efor === e.value
+                              ? "bg-[#2563EB] text-white"
+                              : "text-[#786655] hover:text-[#2C2016]"
+                          }`}
+                        >
+                          {e.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* User Profile & Logout */}
+            {user && (
+              <div className="flex items-center gap-2.5 pl-3 border-l-[1.5px] border-[#DFCFC0]">
+                <div className="w-8 h-8 rounded-xl bg-[#2C2016] text-[#FFFDF9] flex items-center justify-center font-bold text-xs shadow-2xs">
+                  {user.ad ? user.ad.charAt(0).toUpperCase() : "U"}
+                </div>
+                <span className="hidden lg:inline text-xs font-bold text-[#2C2016] truncate max-w-[120px]">
+                  {user.ad}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 rounded-xl text-[#786655] hover:text-[#DC2626] hover:bg-rose-100 transition-colors cursor-pointer"
+                  title="Çıkış Yap"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Hamburger */}
+            <button
+              onClick={() => setMobileAcik((v) => !v)}
+              className="md:hidden p-2 rounded-xl bg-[#EFE7DE] border border-[#DFCFC0] text-[#2C2016]"
+              aria-label="Menü"
+            >
+              {mobileAcik ? <X size={18} /> : <Menu size={18} />}
+            </button>
           </div>
         </div>
+      </header>
+
+      {/* ── MOBILE MENU OVERLAY ──────────────────────────────────────── */}
+      {mobileAcik && (
+        <div
+          className="fixed inset-0 z-40 bg-black/35 backdrop-blur-xs md:hidden"
+          onClick={() => setMobileAcik(false)}
+        />
       )}
-      <button
-        onClick={handleLogout}
-        className="flex items-center gap-2 w-full text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg px-2 py-1.5 transition-colors"
-      >
-        <LogOut size={13} />
-        Çıkış Yap
-      </button>
-    </div>
-  );
-}
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen bg-gray-50">
-      <aside className="fixed inset-y-0 left-0 w-56 bg-white border-r border-gray-200 flex flex-col z-20">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-gray-200">
-          <div className="bg-indigo-600 text-white p-1.5 rounded-lg shrink-0">
-            <Rocket size={16} />
+      {/* Mobile Drawer */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#FFFDF9] border-r-[1.5px] border-[#DFCFC0] p-5 flex flex-col shadow-2xl transition-transform duration-300 md:hidden ${
+          mobileAcik ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between pb-3.5 border-b border-[#DFCFC0] mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#2563EB] text-white flex items-center justify-center font-bold">
+              <Sparkles size={16} />
+            </div>
+            <span className="font-bold text-[#2C2016] text-base">Marta Ar-Ge</span>
           </div>
-          <span className="font-bold text-gray-900 text-sm leading-tight">
-            Teknopark<br />
-            <span className="font-normal text-gray-500">Başvuru</span>
-          </span>
+          <button
+            onClick={() => setMobileAcik(false)}
+            className="p-1 rounded text-[#786655] hover:text-[#2C2016]"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <Suspense
-          fallback={
-            <nav className="flex-1 px-3 py-4 space-y-1">
-              {["Panel", "Yeni başvuru", "Projelerim"].map((label) => (
-                <div key={label} className="h-8 bg-gray-100 rounded-lg animate-pulse" />
-              ))}
-            </nav>
-          }
-        >
-          <SidebarNav />
-        </Suspense>
+        <nav className="space-y-1.5 flex-1">
+          <Link
+            href="/panel"
+            onClick={() => setMobileAcik(false)}
+            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold ${
+              panelActive ? "bg-[#2563EB] text-white" : "text-[#786655] hover:bg-[#EFE7DE] hover:text-[#2C2016]"
+            }`}
+          >
+            <LayoutDashboard size={16} />
+            <span>Panel</span>
+          </Link>
 
-        <AiAyarlari />
-        <SidebarFooter />
-      </aside>
+          <Link
+            href="/projeler"
+            onClick={() => setMobileAcik(false)}
+            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold ${
+              projelerActive && !yeniActive ? "bg-[#2563EB] text-white" : "text-[#786655] hover:bg-[#EFE7DE] hover:text-[#2C2016]"
+            }`}
+          >
+            <FolderOpen size={16} />
+            <span>Projeler</span>
+          </Link>
 
-      <main className="ml-56 flex-1 min-w-0 p-8">{children}</main>
+          <Link
+            href="/yeni"
+            onClick={() => setMobileAcik(false)}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold btn-3d-primary mt-2"
+          >
+            <Plus size={16} />
+            <span>Yeni Başvuru Aç</span>
+          </Link>
+
+          {/* Quick status filters */}
+          <div className="pt-4 mt-4 border-t border-[#DFCFC0] space-y-1">
+            <p className="text-[11px] text-[#786655] font-bold mb-1.5 px-1 uppercase tracking-wider">
+              Filtreler
+            </p>
+            {STATULER.map((s) => (
+              <Link
+                key={s}
+                href={`/projeler?statu=${encodeURIComponent(s)}`}
+                onClick={() => setMobileAcik(false)}
+                className="flex items-center justify-between text-xs text-[#786655] hover:text-[#2C2016] py-1.5 px-2 rounded-lg hover:bg-[#EFE7DE]"
+              >
+                <span>{s}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+
+        <div className="pt-3 border-t border-[#DFCFC0]">
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center gap-2 w-full text-xs font-bold text-[#DC2626] hover:bg-rose-100 py-2.5 rounded-xl transition-colors cursor-pointer border border-rose-200"
+          >
+            <LogOut size={14} />
+            <span>Güvenli Çıkış</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
+      <main className="flex-1 min-w-0">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+          <Suspense fallback={<div className="py-20 text-center text-xs text-[#786655]">Yükleniyor...</div>}>
+            {children}
+          </Suspense>
+        </div>
+      </main>
     </div>
   );
 }

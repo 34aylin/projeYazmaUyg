@@ -2,16 +2,64 @@
 
 import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Download, Send, AlertTriangle, CheckCircle, History, Wand2, Loader2 } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Save,
+  Download,
+  Send,
+  AlertTriangle,
+  CheckCircle2,
+  History,
+  Wand2,
+  Loader2,
+  Copy,
+  Check,
+  FileText,
+  MessageSquare,
+  ShieldCheck,
+  Award,
+  Clock,
+  Sparkles,
+  Search,
+  Info,
+} from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { swrFetcher, ProjectData, Message, updateProje, ApiError, apiFetch } from "@/lib/api";
 import { METIN_ALANLARI } from "@/lib/fields";
 import { getToken } from "@/lib/auth";
 import { getAyarlar } from "@/lib/ayarlar";
-import Link from "next/link";
 
-// ── Form Tab ──────────────────────────────────────────────────────────────
+const KATEGORILER: Record<string, { label: string; fields: string[] }> = {
+  tumu: { label: "Tüm Alanlar", fields: Object.keys(METIN_ALANLARI) },
+  temel: {
+    label: "Temel Bilgiler",
+    fields: ["proje_adi", "proje_kodu", "anahtar_kelimeler"],
+  },
+  arge: {
+    label: "Ar-Ge & Yenilikçilik",
+    fields: ["proje_konusu", "arge_niteligi", "yenilikci_yonu", "hedeflenen_kazanimlar"],
+  },
+  yontem: {
+    label: "Yöntem & Çıktılar",
+    fields: ["proje_detayi", "ciktilar_kullanim_alanlari", "toplum_cevre_degeri"],
+  },
+  pazar: {
+    label: "Pazar & Ticarileşme",
+    fields: [
+      "ticarilesme_potansiyeli",
+      "musteri_segmentleri",
+      "rakipler",
+      "urun_konumlandirma",
+      "satis_yontemleri",
+      "ihracat_ithal_ikame",
+      "maliyetler",
+      "fiyat_maliyet_analizi",
+      "ilk_yatirim_maliyeti",
+      "istihdam_ciro",
+    ],
+  },
+};
 
 function aiParcala(metin: string, tahminler: string[]): { metin: string; ai: boolean }[] {
   if (!tahminler?.length) return [{ metin, ai: false }];
@@ -30,13 +78,24 @@ function aiParcala(metin: string, tahminler: string[]): { metin: string; ai: boo
   return sonuc;
 }
 
-function FormTab({ dosya, data, onSaved }: { dosya: string; data: ProjectData; onSaved: () => void }) {
+function FormTab({
+  dosya,
+  data,
+  onSaved,
+}: {
+  dosya: string;
+  data: ProjectData;
+  onSaved: () => void;
+}) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [kaydediliyor, setKaydediliyor] = useState(false);
   const [tamamlaniyor, setTamamlaniyor] = useState(false);
   const [mesaj, setMesaj] = useState<{ tip: "ok" | "hata"; metin: string } | null>(null);
   const [editMod, setEditMod] = useState<Record<string, boolean>>({});
   const [sadeceAi, setSadeceAi] = useState(false);
+  const [seciliKategori, setSeciliKategori] = useState("tumu");
+  const [alanArama, setAlanArama] = useState("");
+  const [kopyalandiAlan, setKopyalandiAlan] = useState<string | null>(null);
 
   useEffect(() => {
     const initial: Record<string, string> = {};
@@ -69,7 +128,7 @@ function FormTab({ dosya, data, onSaved }: { dosya: string; data: ProjectData; o
       setTimeout(() => setMesaj(null), 4000);
       onSaved();
     } catch (e) {
-      setMesaj({ tip: "hata", metin: e instanceof Error ? e.message : "Hata." });
+      setMesaj({ tip: "hata", metin: e instanceof Error ? e.message : "Hata oluştu." });
     } finally {
       setTamamlaniyor(false);
     }
@@ -80,7 +139,7 @@ function FormTab({ dosya, data, onSaved }: { dosya: string; data: ProjectData; o
     setMesaj(null);
     try {
       await updateProje(dosya, form, data);
-      setMesaj({ tip: "ok", metin: "Kaydedildi." });
+      setMesaj({ tip: "ok", metin: "Değişiklikler başarıyla kaydedildi." });
       setTimeout(() => setMesaj(null), 3000);
       onSaved();
     } catch (e) {
@@ -90,146 +149,295 @@ function FormTab({ dosya, data, onSaved }: { dosya: string; data: ProjectData; o
     }
   }
 
-  const aiTahminListesi = Object.entries(METIN_ALANLARI)
-    .flatMap(([key, meta]) => {
-      const tahminler = (data.tahminler?.[key] ?? []) as string[];
-      return tahminler.map((t) => ({ alan: meta.label, cumle: t.replace(/^~/, "") }));
-    });
+  function handlePanoyaKopyala(key: string, metin: string) {
+    navigator.clipboard.writeText(metin);
+    setKopyalandiAlan(key);
+    setTimeout(() => setKopyalandiAlan(null), 2000);
+  }
+
+  const aiTahminListesi = Object.entries(METIN_ALANLARI).flatMap(([key, meta]) => {
+    const tahminler = (data.tahminler?.[key] ?? []) as string[];
+    return tahminler.map((t) => ({ alan: meta.label, cumle: t.replace(/^~/, "") }));
+  });
+
+  const gosterilenAlanlar = Object.entries(METIN_ALANLARI).filter(([key, meta]) => {
+    const katMatch =
+      seciliKategori === "tumu" || KATEGORILER[seciliKategori]?.fields.includes(key);
+    const araMatch =
+      !alanArama ||
+      meta.label.toLowerCase().includes(alanArama.toLowerCase()) ||
+      (form[key] ?? "").toLowerCase().includes(alanArama.toLowerCase());
+    return katMatch && araMatch;
+  });
 
   return (
-    <div>
-      {aiTahminListesi.length > 0 && (
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => setSadeceAi((v) => !v)}
-            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              sadeceAi
-                ? "bg-red-50 border-red-300 text-red-700"
-                : "bg-white border-gray-300 text-gray-600 hover:border-red-300 hover:text-red-600"
-            }`}
-          >
-            <Wand2 size={12} />
-            {sadeceAi ? "← Forma dön" : `AI tahminlerini göster (${aiTahminListesi.length})`}
-          </button>
-        </div>
-      )}
+    <div className="space-y-6 text-[#2C2016]">
+      {/* Category Tabs & Filter Toolbar with 3D Depth */}
+      <div className="card-3d p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {Object.entries(KATEGORILER).map(([kKey, kat]) => {
+              const aktif = seciliKategori === kKey;
+              return (
+                <button
+                  key={kKey}
+                  type="button"
+                  onClick={() => setSeciliKategori(kKey)}
+                  className={`text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
+                    aktif
+                      ? "bg-[#2563EB] text-white border-b-2 border-[#1D4ED8] shadow-xs"
+                      : "bg-[#EFE7DE] text-[#786655] border-[1.5px] border-[#DFCFC0] hover:text-[#2C2016]"
+                  }`}
+                >
+                  {kat.label}
+                </button>
+              );
+            })}
+          </div>
 
+          {/* Quick Search */}
+          <div className="relative w-full sm:w-64">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#786655]" />
+            <input
+              type="text"
+              placeholder="Formda ara..."
+              value={alanArama}
+              onChange={(e) => setAlanArama(e.target.value)}
+              className="w-full pl-10 pr-3.5 py-2 text-xs font-semibold bg-[#EFE7DE] border-[1.5px] border-[#DFCFC0] text-[#2C2016] rounded-xl focus:outline-none focus:border-[#2563EB] transition-colors placeholder-[#8F7D6D]"
+            />
+          </div>
+        </div>
+
+        {/* AI Predictions Toggle Banner */}
+        {aiTahminListesi.length > 0 && (
+          <div className="flex items-center justify-between pt-3 border-t border-[#DFCFC0]">
+            <div className="flex items-center gap-2 text-xs text-[#786655] font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] animate-pulse" />
+              <span>
+                Yapay zekâ tarafından yapılan <strong className="text-[#2C2016]">{aiTahminListesi.length}</strong> tahmin mevcut.
+              </span>
+            </div>
+            {/* 3D GREEN BUTTON */}
+            <button
+              type="button"
+              onClick={() => setSadeceAi((v) => !v)}
+              className="btn-3d-green text-xs font-bold px-3.5 py-1.5 rounded-xl cursor-pointer"
+            >
+              <Wand2 size={14} className="mr-1.5" />
+              <span>{sadeceAi ? "Forma Dön" : "AI Tahminlerini Gör"}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* AI Predictions View */}
       {sadeceAi && (
-        <div className="space-y-3 pb-24">
+        <div className="space-y-3 pb-32">
           {aiTahminListesi.map((item, i) => (
-            <div key={i} className="bg-white border border-red-100 rounded-xl px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 mb-1">{item.alan}</p>
-              <p className="text-sm text-red-600 leading-relaxed">{item.cumle}</p>
+            <div
+              key={i}
+              className="card-3d p-4 sm:p-5"
+            >
+              <p className="text-xs font-bold text-[#2563EB] uppercase tracking-wider mb-1">
+                {item.alan}
+              </p>
+              <p className="text-sm font-semibold text-[#2C2016] leading-relaxed">{item.cumle}</p>
             </div>
           ))}
         </div>
       )}
-      {!sadeceAi && <div className="space-y-5 pb-24">
-        {Object.entries(METIN_ALANLARI).map(([key, meta]) => {
-          const val = form[key] ?? "";
-          const len = val.length;
-          const asiri = meta.limit ? len > meta.limit : false;
-          const dusuk = meta.onerilen ? len > 0 && len < meta.onerilen[0] : false;
-          const eksikIcerik = val.includes("[EKSİK");
-          const eksikAlan = val.trim() === "";
 
-          const tahminler = (data.tahminler?.[key] ?? []) as string[];
-          const hasAi = tahminler.length > 0 && !editMod[key];
-          const rows = key === "proje_detayi" ? 14
-            : key === "arge_niteligi" || key === "proje_konusu" ? 8
-            : key === "proje_adi" || key === "proje_kodu" || key === "anahtar_kelimeler" ? 2
-            : 5;
+      {/* Main Form Fields with Clear 3D Rounded Cards */}
+      {!sadeceAi && (
+        <div className="space-y-5 pb-32">
+          {gosterilenAlanlar.map(([key, meta]) => {
+            const val = form[key] ?? "";
+            const len = val.length;
+            const asiri = meta.limit ? len > meta.limit : false;
+            const dusuk = meta.onerilen ? len > 0 && len < meta.onerilen[0] : false;
+            const eksikIcerik = val.includes("[EKSİK");
+            const eksikAlan = val.trim() === "";
 
-          return (
-            <div key={key}>
-              <div className="flex items-start justify-between mb-1.5 gap-2">
-                <label className="text-sm font-semibold text-gray-800 leading-tight flex items-center gap-1.5">
-                  {meta.label}
-                  {eksikAlan && <span className="text-xs font-normal text-red-400">boş</span>}
-                  {eksikIcerik && !eksikAlan && (
-                    <span className="text-xs font-normal text-amber-500">[EKSİK içerik var]</span>
-                  )}
-                  {tahminler.length > 0 && (
-                    <span className="text-xs font-normal text-red-500 bg-red-50 px-1.5 py-0.5 rounded">AI tahmini</span>
-                  )}
-                </label>
-                <div className="flex items-center gap-2 shrink-0">
-                  {tahminler.length > 0 && (
+            const tahminler = (data.tahminler?.[key] ?? []) as string[];
+            const hasAi = tahminler.length > 0 && !editMod[key];
+            const rows =
+              key === "proje_detayi"
+                ? 12
+                : key === "arge_niteligi" || key === "proje_konusu"
+                ? 8
+                : key === "proje_adi" || key === "proje_kodu" || key === "anahtar_kelimeler"
+                ? 2
+                : 5;
+
+            return (
+              <div
+                key={key}
+                className={`card-3d p-5 sm:p-6 transition-all ${
+                  asiri
+                    ? "border-rose-400 bg-rose-50/60"
+                    : "bg-[#FFFDF9]"
+                }`}
+              >
+                {/* Field Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5 pb-3 border-b border-[#DFCFC0]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-sm sm:text-base font-extrabold text-[#2C2016]">
+                      {meta.label}
+                    </label>
+
+                    {eksikAlan && (
+                      <span className="text-[10px] font-bold text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full">
+                        Boş
+                      </span>
+                    )}
+                    {eksikIcerik && !eksikAlan && (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                        [Eksik] içerik var
+                      </span>
+                    )}
+                    {tahminler.length > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                        AI Tahmini ({tahminler.length})
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Character Counter & 3D Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setEditMod((p) => ({ ...p, [key]: !p[key] }))}
-                      className="text-xs text-indigo-500 hover:text-indigo-700"
+                      onClick={() => handlePanoyaKopyala(key, val)}
+                      className="p-2 rounded-xl bg-[#EFE7DE] border border-[#DFCFC0] text-[#786655] hover:text-[#2C2016] transition-colors cursor-pointer shadow-2xs"
+                      title="Metni panoya kopyala"
                     >
-                      {editMod[key] ? "Önizle" : "Düzenle"}
+                      {kopyalandiAlan === key ? (
+                        <Check size={14} className="text-[#16A34A]" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
                     </button>
-                  )}
-                  <span className={`text-xs tabular-nums ${asiri ? "text-red-600 font-bold" : dusuk ? "text-amber-500" : "text-gray-400"}`}>
-                    {len.toLocaleString("tr-TR")}
-                    {meta.limit ? ` / ${meta.limit.toLocaleString("tr-TR")}` : ""}
-                    {meta.onerilen && !meta.limit ? ` (önerilen: ${meta.onerilen[0].toLocaleString("tr-TR")}–${meta.onerilen[1].toLocaleString("tr-TR")})` : ""}
-                  </span>
-                </div>
-              </div>
-              {hasAi ? (
-                <div
-                  onClick={() => setEditMod((p) => ({ ...p, [key]: true }))}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap cursor-text min-h-[${rows * 1.6}rem] ${
-                    asiri ? "border-red-400 bg-red-50/50" : "border-gray-300 bg-white"
-                  }`}
-                >
-                  {aiParcala(val, tahminler).map((p, i) =>
-                    p.ai
-                      ? <span key={i} className="text-red-600 font-medium">{p.metin}</span>
-                      : <span key={i}>{p.metin}</span>
-                  )}
-                </div>
-              ) : (
-                <textarea
-                  value={val}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                  rows={rows}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
-                    asiri ? "border-red-400 bg-red-50/50" : eksikAlan ? "border-gray-200 bg-gray-50/50" : "border-gray-300 bg-white"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>}
 
-      {/* Sticky save bar */}
-      <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center gap-3 z-10">
-        <button
-          onClick={handleKaydet}
-          disabled={kaydediliyor || tamamlaniyor}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
-        >
-          <Save size={15} />
-          {kaydediliyor ? "Kaydediliyor..." : "Kaydet"}
-        </button>
-        <button
-          onClick={handleTamamla}
-          disabled={kaydediliyor || tamamlaniyor}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
-          title="Formdaki [EKSİK] alanları bağlama göre AI ile doldur"
-        >
-          {tamamlaniyor ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-          {tamamlaniyor ? "Tamamlanıyor..." : "Bağlama göre doldur"}
-        </button>
-        {mesaj && (
-          <span className={`flex items-center gap-1.5 text-sm ${mesaj.tip === "ok" ? "text-green-600" : "text-red-600"}`}>
-            {mesaj.tip === "ok" ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
-            {mesaj.metin}
-          </span>
-        )}
+                    {tahminler.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEditMod((p) => ({ ...p, [key]: !p[key] }))}
+                        className="text-xs font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-xl border border-emerald-300 cursor-pointer shadow-2xs"
+                      >
+                        {editMod[key] ? "Önizle" : "Düzenle"}
+                      </button>
+                    )}
+
+                    <div
+                      className={`text-xs tabular-nums font-mono font-bold px-3 py-1.5 rounded-xl border ${
+                        asiri
+                          ? "text-rose-900 bg-rose-100 border-rose-300"
+                          : dusuk
+                          ? "text-amber-900 bg-amber-100 border-amber-300"
+                          : "text-[#786655] bg-[#EFE7DE] border-[#DFCFC0]"
+                      }`}
+                    >
+                      {len.toLocaleString("tr-TR")}
+                      {meta.limit ? ` / ${meta.limit.toLocaleString("tr-TR")}` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Field Body */}
+                {hasAi ? (
+                  <div
+                    onClick={() => setEditMod((p) => ({ ...p, [key]: true }))}
+                    style={{ minHeight: `${rows * 1.6}rem` }}
+                    className="w-full rounded-xl border-[1.5px] border-[#DFCFC0] p-4 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap cursor-text bg-[#EFE7DE] text-[#2C2016] font-medium"
+                  >
+                    {aiParcala(val, tahminler).map((p, i) =>
+                      p.ai ? (
+                        <span
+                          key={i}
+                          className="text-emerald-950 bg-emerald-200/80 font-bold px-1.5 py-0.5 rounded-md border border-emerald-400"
+                        >
+                          {p.metin}
+                        </span>
+                      ) : (
+                        <span key={i} className="text-[#2C2016]">{p.metin}</span>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    value={val}
+                    onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                    rows={rows}
+                    placeholder={`${meta.label} alanını buraya girin...`}
+                    className={`w-full rounded-xl border-[1.5px] p-4 text-xs sm:text-sm font-medium leading-relaxed resize-y focus:outline-none focus:border-[#2563EB] transition-colors text-[#2C2016] placeholder-[#8F7D6D] ${
+                      asiri
+                        ? "bg-rose-50 border-rose-400"
+                        : "bg-[#EFE7DE] border-[#DFCFC0]"
+                    }`}
+                  />
+                )}
+
+                {meta.onerilen && (
+                  <p className="text-[11px] text-[#786655] mt-2.5 flex items-center gap-1.5 font-medium">
+                    <Info size={13} className="text-[#2563EB]" />
+                    <span>
+                      Önerilen karakter aralığı:{" "}
+                      <strong className="text-[#2C2016]">
+                        {meta.onerilen[0].toLocaleString("tr-TR")} –{" "}
+                        {meta.onerilen[1].toLocaleString("tr-TR")}
+                      </strong>
+                    </span>
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── STICKY 3D SAVE / ACTION BAR ──────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#FFFDF9]/95 backdrop-blur-md border-t-[1.5px] border-[#DFCFC0] px-4 sm:px-8 py-3.5 z-30 shadow-[0_-4px_16px_rgba(70,45,20,0.06)]">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* 3D PRIMARY ACTION */}
+            <button
+              onClick={handleKaydet}
+              disabled={kaydediliyor || tamamlaniyor}
+              className="btn-3d-primary disabled:opacity-50 text-white text-xs sm:text-sm font-bold px-7 py-3 rounded-xl cursor-pointer"
+            >
+              {kaydediliyor ? <Loader2 size={16} className="animate-spin mr-1.5" /> : <Save size={16} className="mr-1.5" />}
+              <span>{kaydediliyor ? "Kaydediliyor..." : "Kaydet"}</span>
+            </button>
+
+            {/* 3D GREEN ACTION */}
+            <button
+              onClick={handleTamamla}
+              disabled={kaydediliyor || tamamlaniyor}
+              className="btn-3d-green disabled:opacity-50 text-white text-xs sm:text-sm font-bold px-6 py-3 rounded-xl cursor-pointer"
+              title="Formdaki [EKSİK] alanları bağlama göre AI ile doldur"
+            >
+              {tamamlaniyor ? <Loader2 size={16} className="animate-spin mr-1.5" /> : <Wand2 size={16} className="mr-1.5" />}
+              <span>{tamamlaniyor ? "Dolduruluyor..." : "Eksikleri Tamamla"}</span>
+            </button>
+          </div>
+
+          {mesaj && (
+            <div
+              className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl border ${
+                mesaj.tip === "ok"
+                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                  : "bg-rose-100 text-rose-900 border-rose-300"
+              }`}
+            >
+              {mesaj.tip === "ok" ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              <span>{mesaj.metin}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-// ── Asistan Tab ────────────────────────────────────────────────────────────
 
 function AsistanTab({ dosya }: { dosya: string }) {
   const { data: sohbetData, mutate: mutateSohbet } = useSWR<{ sohbet: Message[] }>(
@@ -248,13 +456,13 @@ function AsistanTab({ dosya }: { dosya: string }) {
     sonRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mesajlar, yerelMesajlar, sonucMesaj]);
 
-  async function handleGonder() {
-    if (!girdi.trim() || gonderiliyor) return;
-    const kullaniciMesaj = girdi.trim();
+  async function handleGonder(metinGonder?: string) {
+    const mesajIcerik = (metinGonder || girdi).trim();
+    if (!mesajIcerik || gonderiliyor) return;
     setGirdi("");
     setGonderiliyor(true);
     setSonucMesaj("");
-    setYerelMesajlar([{ role: "user", content: kullaniciMesaj }]);
+    setYerelMesajlar([{ role: "user", content: mesajIcerik }]);
 
     try {
       const token = getToken();
@@ -264,10 +472,10 @@ function AsistanTab({ dosya }: { dosya: string }) {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ mesaj: kullaniciMesaj }),
+        body: JSON.stringify({ mesaj: mesajIcerik }),
       });
 
-      if (!res.ok) throw new Error(`Hata ${res.status}`);
+      if (!res.ok) throw new Error(`Sunucu Hatası (${res.status})`);
       const data = await res.json();
 
       if (data.type === "done") {
@@ -275,7 +483,7 @@ function AsistanTab({ dosya }: { dosya: string }) {
         setYerelMesajlar([]);
         mutateSohbet();
       } else if (data.type === "error") {
-        setSonucMesaj("Hata: " + data.msg);
+        setSonucMesaj("Hata: " + (data.msg || "Bilinmeyen hata"));
       }
     } catch (e) {
       setSonucMesaj("Hata: " + (e instanceof Error ? e.message : "Bilinmeyen hata"));
@@ -290,61 +498,108 @@ function AsistanTab({ dosya }: { dosya: string }) {
     ...(sonucMesaj ? [{ role: "assistant" as const, content: sonucMesaj }] : []),
   ];
 
+  const ONERILEN_SORULAR = [
+    "Ar-Ge niteliği alanını daha ikna edici hale getir",
+    "Karakter limitini aşan alanları özetle",
+    "Hedeflenen kazanımlar için ölçülebilir KPI'lar ekle",
+    "Yerli ve yabancı rakipler analizini detaylandır",
+  ];
+
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 220px)" }}>
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4">
+    <div className="card-3d p-6 flex flex-col h-[calc(100vh-230px)]">
+      {/* Messages Scroll Area */}
+      <div className="flex-1 overflow-y-auto space-y-3.5 pr-2 mb-4 scrollbar-thin">
         {tumMesajlar.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 text-sm">
-            <p className="text-base mb-1">Asistana soru sorun</p>
-            <p>Alanları düzeltmek, geliştirmek veya fikir almak için mesaj yazın.</p>
-          </div>
-        ) : tumMesajlar.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-              m.role === "user" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-900"
-            }`}>
-              {m.content}
+          <div className="text-center py-16 px-4">
+            <div className="w-12 h-12 bg-blue-100 text-[#2563EB] rounded-2xl flex items-center justify-center mx-auto mb-3 border border-blue-200 border-b-2 border-b-blue-300">
+              <Sparkles size={24} />
+            </div>
+            <h3 className="text-base font-extrabold text-[#2C2016] mb-1">
+              Teknopark AI Asistanı Hazır
+            </h3>
+            <p className="text-xs text-[#786655] max-w-md mx-auto mb-6 font-medium">
+              Başvuru metinlerinizi geliştirmek, Ar-Ge puanınızı artırmak veya eksik alanları tamamlamak için
+              sorularınızı sorabilirsiniz.
+            </p>
+
+            {/* Quick Prompt Chips */}
+            <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
+              {ONERILEN_SORULAR.map((soru) => (
+                <button
+                  key={soru}
+                  type="button"
+                  onClick={() => handleGonder(soru)}
+                  className="btn-3d-neutral text-xs font-bold px-3.5 py-2 rounded-xl cursor-pointer"
+                >
+                  {soru}
+                </button>
+              ))}
             </div>
           </div>
-        ))}
+        ) : (
+          tumMesajlar.map((m, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2.5 ${
+                m.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              {m.role === "assistant" && (
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center shrink-0 mt-0.5 border border-blue-200 border-b-2 border-b-blue-300">
+                  <Sparkles size={15} />
+                </div>
+              )}
+              <div
+                className={`max-w-[85%] rounded-2xl px-4.5 py-3 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-wrap ${
+                  m.role === "user"
+                    ? "bg-[#2563EB] text-white border-b-2 border-[#1D4ED8] shadow-xs"
+                    : "bg-[#EFE7DE] border-[1.5px] border-[#DFCFC0] text-[#2C2016]"
+                }`}
+              >
+                {m.content}
+              </div>
+            </div>
+          ))
+        )}
+
         {gonderiliyor && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl px-4 py-3 text-sm text-gray-500">
-              <span className="inline-flex gap-1">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </span>
-            </div>
+          <div className="flex items-center gap-2 text-[#2563EB] text-xs font-bold py-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Asistan yanıt hazırlıyor...</span>
           </div>
         )}
         <div ref={sonRef} />
       </div>
 
-      <div className="flex gap-3 border-t border-gray-200 pt-4">
+      {/* Input Bar */}
+      <div className="pt-3.5 border-t border-[#DFCFC0] flex gap-2.5">
         <textarea
           value={girdi}
           onChange={(e) => setGirdi(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleGonder(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleGonder();
+            }
+          }}
           rows={2}
-          placeholder="Mesajınızı yazın... (Enter gönder, Shift+Enter yeni satır)"
-          className="flex-1 rounded-xl border border-gray-300 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Asistana soru sorun... (Enter gönderir, Shift+Enter yeni satır)"
+          className="flex-1 bg-[#EFE7DE] border-[1.5px] border-[#DFCFC0] text-[#2C2016] font-medium rounded-xl px-3.5 py-2.5 text-xs sm:text-sm resize-none focus:outline-none focus:border-[#2563EB] transition-colors placeholder-[#8F7D6D]"
           disabled={gonderiliyor}
         />
+        {/* 3D SEND BUTTON */}
         <button
-          onClick={handleGonder}
+          onClick={() => handleGonder()}
           disabled={!girdi.trim() || gonderiliyor}
-          className="self-end flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+          className="self-end btn-3d-primary disabled:opacity-40 text-white text-xs font-bold px-5 py-3 rounded-xl cursor-pointer"
         >
-          <Send size={14} />
-          Gönder
+          <Send size={15} />
+          <span className="ml-1.5">Gönder</span>
         </button>
       </div>
     </div>
   );
 }
-
-// ── Kontrol Tab ────────────────────────────────────────────────────────────
 
 function KontrolTab({ data }: { data: ProjectData }) {
   const alanlar = data.alanlar ?? {};
@@ -362,91 +617,119 @@ function KontrolTab({ data }: { data: ProjectData }) {
   const tamam = eksikler.length === 0 && asirilar.length === 0;
 
   return (
-    <div className="space-y-5 max-w-2xl">
-      {tamam && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-4">
-          <CheckCircle size={20} className="text-green-500 shrink-0" />
-          <p className="text-sm font-medium text-green-700">Tüm alanlar dolu ve limit dahilinde.</p>
+    <div className="space-y-5 max-w-3xl pb-24 text-[#2C2016]">
+      {tamam ? (
+        <div className="card-3d p-5 flex items-center gap-3.5 bg-emerald-50/80 border-emerald-300">
+          <CheckCircle2 size={24} className="shrink-0 text-emerald-700" />
+          <div>
+            <h3 className="text-sm font-extrabold text-emerald-950">Form Tamamen Hazır</h3>
+            <p className="text-xs text-emerald-800 font-medium mt-0.5">
+              Tüm 20 alan eksiksiz dolduruldu ve karakter sınırları dahilinde.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="card-3d p-5 flex items-center gap-3.5 bg-amber-50/80 border-amber-300">
+          <AlertTriangle size={24} className="shrink-0 text-amber-700" />
+          <div>
+            <h3 className="text-sm font-extrabold text-amber-950">Düzenlenmesi Gereken Alanlar Var</h3>
+            <p className="text-xs text-amber-800 font-medium mt-0.5">
+              Başvurunun resmi onay alabilmesi için eksik veya limit aşımı olan alanları düzenleyin.
+            </p>
+          </div>
         </div>
       )}
 
+      {/* Ar-Ge Değerlendirmesi */}
       {data.arge_uygunluk_degerlendirmesi && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 text-sm mb-2">Ar-Ge Uygunluk Değerlendirmesi</h3>
-          <p className={`text-sm font-bold mb-1 ${
-            data.arge_uygunluk_degerlendirmesi.puan === "Yüksek" ? "text-emerald-600"
-              : data.arge_uygunluk_degerlendirmesi.puan === "Orta" ? "text-yellow-600" : "text-red-600"
-          }`}>
-            {data.arge_uygunluk_degerlendirmesi.puan}
-          </p>
+        <div className="card-3d p-5 sm:p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-[#2C2016] text-xs sm:text-sm flex items-center gap-2">
+              <Award size={18} className="text-[#2563EB]" />
+              <span>Ar-Ge ve Yenilikçilik Uygunluk Değerlendirmesi</span>
+            </h3>
+            <span
+              className={`text-xs font-bold px-3 py-1 rounded-xl border ${
+                data.arge_uygunluk_degerlendirmesi.puan === "Yüksek"
+                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                  : data.arge_uygunluk_degerlendirmesi.puan === "Orta"
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : "bg-rose-100 text-rose-900 border-rose-300"
+              }`}
+            >
+              Skor: {data.arge_uygunluk_degerlendirmesi.puan}
+            </span>
+          </div>
           {data.arge_uygunluk_degerlendirmesi.gerekce && (
-            <p className="text-sm text-gray-600 leading-relaxed">{data.arge_uygunluk_degerlendirmesi.gerekce}</p>
+            <p className="text-xs text-[#786655] font-medium leading-relaxed pt-3 border-t border-[#DFCFC0]">
+              {data.arge_uygunluk_degerlendirmesi.gerekce}
+            </p>
           )}
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          {eksikler.length > 0 ? <AlertTriangle size={16} className="text-amber-500" /> : <CheckCircle size={16} className="text-green-500" />}
-          <h3 className="font-semibold text-gray-900 text-sm">Eksik Alanlar ({eksikler.length})</h3>
-        </div>
+      {/* Eksik Alanlar */}
+      <div className="card-3d p-5 sm:p-6">
+        <h3 className="font-extrabold text-[#2C2016] text-xs sm:text-sm mb-3.5 flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          <span>Boş Bırakılmış Alanlar ({eksikler.length})</span>
+        </h3>
         {eksikler.length === 0 ? (
-          <p className="text-sm text-green-600">Tüm alanlar dolu.</p>
+          <p className="text-xs text-[#16A34A] font-bold">Tüm form alanları dolu.</p>
         ) : (
-          <ul className="space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {eksikler.map((l) => (
-              <li key={l} className="flex items-center gap-2 text-sm text-amber-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                {l}
-              </li>
+              <div
+                key={l}
+                className="flex items-center gap-2 text-xs font-semibold text-[#2C2016] bg-[#EFE7DE] border border-[#DFCFC0] px-3.5 py-2.5 rounded-xl"
+              >
+                <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                <span className="truncate">{l}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          {asirilar.length > 0 ? <AlertTriangle size={16} className="text-red-500" /> : <CheckCircle size={16} className="text-green-500" />}
-          <h3 className="font-semibold text-gray-900 text-sm">Karakter Limiti Aşımı ({asirilar.length})</h3>
-        </div>
+      {/* Karakter Aşımı */}
+      <div className="card-3d p-5 sm:p-6">
+        <h3 className="font-extrabold text-[#2C2016] text-xs sm:text-sm mb-3.5 flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+          <span>Karakter Sınırını Aşan Alanlar ({asirilar.length})</span>
+        </h3>
         {asirilar.length === 0 ? (
-          <p className="text-sm text-green-600">Tüm alanlar limit dahilinde.</p>
+          <p className="text-xs text-[#16A34A] font-bold">Tüm alanlar limitler dahilinde.</p>
         ) : (
-          <ul className="space-y-2">
+          <div className="space-y-2.5">
             {asirilar.map((a) => (
-              <li key={a.label} className="text-sm">
-                <span className="font-medium text-gray-800">{a.label}</span>
-                <span className="text-red-500 ml-2 text-xs">
-                  {a.len.toLocaleString("tr-TR")} / {a.limit.toLocaleString("tr-TR")} karakter
-                  <span className="ml-1">({(a.len - a.limit).toLocaleString("tr-TR")} fazla)</span>
+              <div
+                key={a.label}
+                className="flex items-center justify-between bg-rose-50 border border-rose-300 p-3 rounded-xl text-xs font-bold"
+              >
+                <span className="text-[#2C2016]">{a.label}</span>
+                <span className="text-rose-800 font-mono">
+                  {a.len} / {a.limit} ({a.len - a.limit} fazla)
                 </span>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
-
-      {(data.eksik_bilgiler?.length ?? 0) > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Temin Edilecek Bilgiler</h3>
-          <ul className="space-y-1.5">
-            {data.eksik_bilgiler!.map((b, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                <span className="text-amber-400 shrink-0 mt-0.5">•</span>
-                {b}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Aktar Tab ──────────────────────────────────────────────────────────────
-
-function AktarTab({ dosya, projeAdi }: { dosya: string; projeAdi: string }) {
+function AktarTab({
+  dosya,
+  projeAdi,
+  data,
+}: {
+  dosya: string;
+  projeAdi: string;
+  data: ProjectData;
+}) {
   const [indiriliyor, setIndiriliyor] = useState<string | null>(null);
+  const [kopyalandi, setKopyalandi] = useState(false);
 
   async function download(path: string, fileName: string) {
     setIndiriliyor(path);
@@ -464,55 +747,99 @@ function AktarTab({ dosya, projeAdi }: { dosya: string; projeAdi: string }) {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Hata");
+      alert(e instanceof Error ? e.message : "İndirme sırasında hata oluştu");
     } finally {
       setIndiriliyor(null);
     }
   }
 
+  function handlePanoyaKopyalaTum() {
+    const alanlar = data.alanlar ?? {};
+    let cikti = `=== TEKNOPARK BAŞVURU FORMU: ${projeAdi} ===\n\n`;
+    for (const [key, meta] of Object.entries(METIN_ALANLARI)) {
+      cikti += `--- ${meta.label} ---\n${alanlar[key] || ""}\n\n`;
+    }
+    navigator.clipboard.writeText(cikti);
+    setKopyalandi(true);
+    setTimeout(() => setKopyalandi(false), 2500);
+  }
+
   const kod = projeAdi.slice(0, 30).replace(/\s+/g, "_") || "proje";
 
   return (
-    <div className="max-w-lg space-y-4">
-      <p className="text-sm text-gray-500">Proje verilerini farklı formatlarda indirin.</p>
-      <div className="grid grid-cols-2 gap-4 mt-4">
-        <button
-          onClick={() => download(`/projeler/${dosya}/word`, `${kod}.docx`)}
-          disabled={!!indiriliyor}
-          className="flex items-center gap-3 bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-xl p-5 transition-colors text-left disabled:opacity-50"
-        >
-          <div className="bg-blue-100 text-blue-600 p-2.5 rounded-lg shrink-0">
-            <Download size={20} />
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">Word İndir</p>
-            <p className="text-xs text-gray-400 mt-0.5">.docx formatında</p>
-          </div>
-        </button>
-
-        <button
-          onClick={() => download(`/projeler/${dosya}/txt`, `${kod}.txt`)}
-          disabled={!!indiriliyor}
-          className="flex items-center gap-3 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl p-5 transition-colors text-left disabled:opacity-50"
-        >
-          <div className="bg-gray-100 text-gray-600 p-2.5 rounded-lg shrink-0">
-            <Download size={20} />
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">TXT İndir</p>
-            <p className="text-xs text-gray-400 mt-0.5">Düz metin formatında</p>
-          </div>
-        </button>
+    <div className="max-w-2xl space-y-6 pb-24 text-[#2C2016]">
+      <div>
+        <h2 className="text-base sm:text-lg font-extrabold text-[#2C2016]">Dışa Aktarma & Portal Aktarımı</h2>
+        <p className="text-xs text-[#786655] font-medium mt-1">
+          Resmi Word şablonunda indirin veya tek tuşla panoya kopyalayın.
+        </p>
       </div>
 
-      {indiriliyor && (
-        <p className="text-sm text-indigo-600 animate-pulse">İndiriliyor...</p>
-      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Word Card */}
+        <div className="card-3d p-6 flex flex-col justify-between">
+          <div className="flex items-start gap-3.5 mb-5">
+            <div className="w-10 h-10 bg-blue-100 text-[#2563EB] rounded-xl flex items-center justify-center shrink-0 border border-blue-200 border-b-2 border-b-blue-300">
+              <Download size={20} />
+            </div>
+            <div>
+              <p className="font-extrabold text-[#2C2016] text-sm">Resmi Word Şablonu (.docx)</p>
+              <p className="text-[11px] text-[#786655] font-medium mt-1 leading-relaxed">
+                Teknopark formatında tablolu resmi belge.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => download(`/projeler/${dosya}/word`, `${kod}.docx`)}
+            disabled={!!indiriliyor}
+            className="w-full btn-3d-blue text-xs font-bold py-2.5 rounded-xl cursor-pointer"
+          >
+            {indiriliyor?.includes("word") ? "İndiriliyor..." : "Word Olarak İndir"}
+          </button>
+        </div>
+
+        {/* TXT Card */}
+        <div className="card-3d p-6 flex flex-col justify-between">
+          <div className="flex items-start gap-3.5 mb-5">
+            <div className="w-10 h-10 bg-[#EFE7DE] text-[#2C2016] rounded-xl flex items-center justify-center shrink-0 border border-[#DFCFC0] border-b-2 border-b-[#CDBCA9]">
+              <FileText size={20} />
+            </div>
+            <div>
+              <p className="font-extrabold text-[#2C2016] text-sm">Düz Metin Formatı (.txt)</p>
+              <p className="text-[11px] text-[#786655] font-medium mt-1 leading-relaxed">
+                Yalın başlık ve metin dökümü.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => download(`/projeler/${dosya}/txt`, `${kod}.txt`)}
+            disabled={!!indiriliyor}
+            className="w-full btn-3d-neutral text-xs font-bold py-2.5 rounded-xl cursor-pointer"
+          >
+            {indiriliyor?.includes("txt") ? "İndiriliyor..." : "Düz Metin İndir"}
+          </button>
+        </div>
+      </div>
+
+      {/* Copy All */}
+      <div className="card-3d p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="font-extrabold text-[#2C2016] text-sm sm:text-base">Tüm Formu Panoya Kopyala</h3>
+          <p className="text-xs text-[#786655] font-medium mt-1">
+            Portal kutularına hızlı yapıştırmak için tüm başlıkları tek tıkla kopyalar.
+          </p>
+        </div>
+        <button
+          onClick={handlePanoyaKopyalaTum}
+          className="btn-3d-primary text-xs font-bold px-5 py-3 rounded-xl shrink-0 cursor-pointer"
+        >
+          {kopyalandi ? <Check size={15} className="mr-1.5" /> : <Copy size={15} className="mr-1.5" />}
+          <span>{kopyalandi ? "Kopyalandı!" : "Tümünü Kopyala"}</span>
+        </button>
+      </div>
     </div>
   );
 }
-
-// ── Versiyon Tab ───────────────────────────────────────────────────────────
 
 function VersiyonTab({ dosya, onGeriYukle }: { dosya: string; onGeriYukle: () => void }) {
   const { data } = useSWR<{ versiyonlar: Array<{ tarih: string; sonuc: ProjectData }> }>(
@@ -532,7 +859,7 @@ function VersiyonTab({ dosya, onGeriYukle }: { dosya: string; onGeriYukle: () =>
       });
       onGeriYukle();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Hata");
+      alert(e instanceof Error ? e.message : "Hata oluştu");
     } finally {
       setGeriYukleniyor(null);
     }
@@ -541,34 +868,55 @@ function VersiyonTab({ dosya, onGeriYukle }: { dosya: string; onGeriYukle: () =>
   const versiyonlar = data?.versiyonlar ?? [];
 
   return (
-    <div className="max-w-xl">
+    <div className="max-w-2xl space-y-4 pb-24 text-[#2C2016]">
+      <div>
+        <h2 className="text-base sm:text-lg font-extrabold text-[#2C2016]">Sürüm Geçmişi</h2>
+        <p className="text-xs text-[#786655] font-medium mt-1">
+          Her kayıtta otomatik arşivlenir. Eski bir sürüme tek tuşla dönebilirsiniz.
+        </p>
+      </div>
+
       {versiyonlar.length === 0 ? (
-        <p className="text-sm text-gray-500">Henüz sürüm kaydı yok. Kaydet butonuna her bastığınızda önceki sürüm saklanır.</p>
+        <div className="card-3d p-8 text-center">
+          <Clock size={22} className="text-[#786655] mx-auto mb-2" />
+          <p className="text-xs font-bold text-[#2C2016]">Henüz Sürüm Kaydı Yok</p>
+          <p className="text-[11px] text-[#786655] mt-1 font-medium">
+            Formda değişiklik yapıp "Kaydet" butonuna bastığınızda sürümler burada listelenir.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {versiyonlar.map((v, i) => (
-            <div key={i} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-gray-800">
-                  {(() => {
-                    try {
-                      return new Date(v.tarih).toLocaleString("tr-TR", {
-                        day: "2-digit", month: "2-digit", year: "numeric",
-                        hour: "2-digit", minute: "2-digit",
-                      });
-                    } catch { return v.tarih; }
-                  })()}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {v.sonuc?.alanlar?.proje_adi as string || "İsimsiz"}
-                </p>
+            <div
+              key={i}
+              className="flex items-center justify-between card-3d p-3.5 text-xs"
+            >
+              <div className="flex items-center gap-3">
+                <span className="w-7 h-7 rounded-lg bg-[#EFE7DE] text-[#2C2016] border border-[#DFCFC0] flex items-center justify-center font-extrabold text-[11px]">
+                  v{versiyonlar.length - i}
+                </span>
+                <div>
+                  <p className="font-bold text-[#2C2016]">
+                    {(() => {
+                      try {
+                        return new Date(v.tarih).toLocaleString("tr-TR");
+                      } catch {
+                        return v.tarih;
+                      }
+                    })()}
+                  </p>
+                  <p className="text-[10px] text-[#786655] font-semibold">
+                    {(v.sonuc?.alanlar?.proje_adi as string) || "İsimsiz"}
+                  </p>
+                </div>
               </div>
+
               <button
                 onClick={() => handleGeriYukle(i)}
                 disabled={geriYukleniyor === i}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 hover:border-indigo-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                className="btn-3d-neutral text-xs font-bold px-3 py-1.5 rounded-lg cursor-pointer"
               >
-                {geriYukleniyor === i ? "Yükleniyor..." : "Geri yükle"}
+                {geriYukleniyor === i ? "Yükleniyor..." : "Bu Sürüme Dön"}
               </button>
             </div>
           ))}
@@ -578,20 +926,35 @@ function VersiyonTab({ dosya, onGeriYukle }: { dosya: string; onGeriYukle: () =>
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
-
 export function ProjeEditor({ dosya }: { dosya: string }) {
   const { data, mutate, isLoading } = useSWR<ProjectData>(`/projeler/${dosya}`, swrFetcher);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-24 text-gray-400 text-sm">Yükleniyor...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-32 space-y-3">
+        <div className="w-8 h-8 border-3 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-[#786655]">Proje verileri yükleniyor...</p>
+      </div>
+    );
   }
 
   if (!data) {
     return (
-      <div className="text-center py-24">
-        <p className="text-gray-500 mb-2">Proje bulunamadı.</p>
-        <Link href="/projeler" className="text-indigo-600 text-sm hover:underline">Geri dön</Link>
+      <div className="card-3d p-10 text-center max-w-md mx-auto my-12">
+        <div className="w-11 h-11 bg-amber-100 text-amber-700 rounded-xl flex items-center justify-center mx-auto mb-3.5 border border-amber-300">
+          <AlertTriangle size={22} />
+        </div>
+        <h2 className="text-sm font-bold text-[#2C2016] mb-1">Dosya Bulunamadı</h2>
+        <p className="text-xs text-[#786655] mb-5 font-medium">
+          İstediğiniz başvuru dosyası mevcut değil veya silinmiş olabilir.
+        </p>
+        <Link
+          href="/projeler"
+          className="btn-3d-primary font-bold text-xs px-4 py-2 rounded-xl"
+        >
+          <ArrowLeft size={15} className="mr-1" />
+          <span>Projelere Dön</span>
+        </Link>
       </div>
     );
   }
@@ -599,37 +962,70 @@ export function ProjeEditor({ dosya }: { dosya: string }) {
   const projeAdi = (data.alanlar?.proje_adi as string) || "İsimsiz Proje";
   const projeKodu = data.alanlar?.proje_kodu as string | undefined;
 
+  const eksikler = Object.keys(METIN_ALANLARI).filter(
+    (k) => !String(data.alanlar?.[k] ?? "").trim()
+  );
+
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/projeler" className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 shrink-0">
-          <ArrowLeft size={15} />
-          Geri
-        </Link>
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-gray-900 truncate">{projeAdi}</h1>
-          {projeKodu && <p className="text-xs text-gray-400 font-mono mt-0.5">{projeKodu}</p>}
+    <div className="space-y-6 max-w-6xl pb-16 text-[#2C2016]">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-[1.5px] border-[#DFCFC0]">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href="/projeler"
+            className="flex items-center justify-center w-9 h-9 rounded-xl border-[1.5px] border-[#DFCFC0] bg-[#EFE7DE] hover:bg-[#E5DCD0] text-[#2C2016] transition-colors shrink-0 cursor-pointer shadow-2xs"
+            title="Geri dön"
+          >
+            <ArrowLeft size={17} />
+          </Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-extrabold text-[#2C2016] tracking-tight truncate">
+                {projeAdi}
+              </h1>
+              {projeKodu && projeKodu !== "?" && (
+                <span className="text-[11px] font-mono font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-lg shrink-0">
+                  {projeKodu}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#786655] font-semibold mt-0.5">Teknopark Başvuru Formu Düzenleyicisi</p>
+          </div>
         </div>
       </div>
 
+      {/* Main Tabs */}
       <Tabs.Root defaultValue="form">
-        <Tabs.List className="flex gap-0.5 border-b border-gray-200 mb-6 -mx-0">
+        <Tabs.List className="flex items-center gap-2 pb-2 mb-6 overflow-x-auto scrollbar-none">
           {[
-            { value: "form", label: "Form" },
-            { value: "asistan", label: "Asistan" },
-            { value: "kontrol", label: "Kontrol" },
-            { value: "aktar", label: "Aktar" },
+            { value: "form", label: "Form Alanları", icon: FileText },
+            { value: "asistan", label: "AI Asistanı", icon: MessageSquare },
+            {
+              value: "kontrol",
+              label: "Uygunluk & Kontrol",
+              icon: ShieldCheck,
+              badge: eksikler.length > 0 ? eksikler.length : undefined,
+            },
+            { value: "aktar", label: "Dışa Aktar", icon: Download },
             { value: "versiyonlar", label: "Sürümler", icon: History },
-          ].map((tab) => (
-            <Tabs.Trigger
-              key={tab.value}
-              value={tab.value}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-700 transition-colors -mb-px"
-            >
-              {tab.icon && <tab.icon size={13} />}
-              {tab.label}
-            </Tabs.Trigger>
-          ))}
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Tabs.Trigger
+                key={tab.value}
+                value={tab.value}
+                className="group flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border-[1.5px] border-[#DFCFC0] data-[state=active]:bg-[#2563EB] data-[state=active]:text-white data-[state=active]:border-[#1D4ED8] data-[state=active]:border-b-3 data-[state=active]:shadow-xs data-[state=inactive]:bg-[#EFE7DE] data-[state=inactive]:text-[#786655] hover:text-[#2C2016] transition-all shrink-0 cursor-pointer shadow-2xs"
+              >
+                <Icon size={15} />
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && (
+                  <span className="text-[10px] font-extrabold bg-[#DC2626] text-white px-2 py-0.2 rounded-full">
+                    {tab.badge}
+                  </span>
+                )}
+              </Tabs.Trigger>
+            );
+          })}
         </Tabs.List>
 
         <Tabs.Content value="form">
@@ -642,7 +1038,7 @@ export function ProjeEditor({ dosya }: { dosya: string }) {
           <KontrolTab data={data} />
         </Tabs.Content>
         <Tabs.Content value="aktar">
-          <AktarTab dosya={dosya} projeAdi={projeAdi} />
+          <AktarTab dosya={dosya} projeAdi={projeAdi} data={data} />
         </Tabs.Content>
         <Tabs.Content value="versiyonlar">
           <VersiyonTab dosya={dosya} onGeriYukle={() => mutate()} />
