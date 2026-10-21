@@ -1,0 +1,19 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+*.egg-info/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env*.local
+
+# Veri & loglar
+backend/data/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
